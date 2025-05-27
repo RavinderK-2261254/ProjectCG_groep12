@@ -13,6 +13,9 @@
 #include <iostream>
 #include <vector>
 
+#define GLM_ENABLE_EXPERIMENTAL
+
+
 // Functiedeclaraties
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
@@ -56,11 +59,13 @@ int main()
     InitFloor();
 
     Shader shader("line.vert", "line.frag");
-    Camera camera(SCR_WIDTH, SCR_HEIGHT, glm::vec3(0.0f, 0.0f, 15.0f));
+    Shader floorShader("floor.vert", "floor.frag");
+
 
     // Genereer looping spline
     std::vector<glm::vec3> loopPoints = GenerateLooptieLoopPoints(20, 6.0f, glm::vec3(0.0f, 0.0f, 0.0f));
     RollerCoasterSpline coaster(loopPoints);
+    Camera camera(SCR_WIDTH, SCR_HEIGHT, glm::vec3(0.0f, 0.0f, 15.0f), &coaster);
 
     while (!glfwWindowShouldClose(window))
     {
@@ -77,13 +82,14 @@ int main()
         glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        shader.use();
-        camera.Matrix(45.0f, 0.1f, 100.0f, shader, "cameraMatrix");
-
-        // Teken vloer
-        glBindVertexArray(floorVAO);
+        floorShader.use();
+        camera.Matrix(45.0f, 0.1f, 100.f, floorShader, "cameraMatrix");
+        glad_glBindVertexArray(floorVAO);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         glBindVertexArray(0);
+
+        shader.use();
+        camera.Matrix(45.0f, 0.1f, 100.0f, shader, "cameraMatrix");
 
         // Teken spline
         coaster.Draw(shader);
@@ -137,15 +143,17 @@ void InitFloor()
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(floorIndices), floorIndices, GL_STATIC_DRAW);
 
-    // Position
+    // Position attribuut (locatie = 0)
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
-    // Color
+
+    // Kleur attribuut (locatie = 1)
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
     glBindVertexArray(0);
 }
+
 
 std::vector<glm::vec3> GenerateLooptieLoopPoints(int count, float radius, glm::vec3 center)
 {
