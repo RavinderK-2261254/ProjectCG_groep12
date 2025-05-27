@@ -1,12 +1,13 @@
 #include"Camera.h"
+#define GLM_ENABLE_EXPERIMENTAL
 
 
-
-Camera::Camera(int width, int height, glm::vec3 position)
+Camera::Camera(int width, int height, glm::vec3 position, RollerCoasterSpline *coaster)
 {
 	Camera::width = width;
 	Camera::height = height;
 	Position = position;
+	spline = coaster;
 }
 
 void Camera::Matrix(float FOVdeg, float nearPlane, float farPlane, Shader& shader, const char* uniform)
@@ -26,7 +27,7 @@ void Camera::Matrix(float FOVdeg, float nearPlane, float farPlane, Shader& shade
 
 
 
-void Camera::Inputs(GLFWwindow* window,float deltaTime)
+void Camera::Inputs(GLFWwindow* window, float deltaTime)
 {
 	// Handles key inputs
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
@@ -63,14 +64,27 @@ void Camera::Inputs(GLFWwindow* window,float deltaTime)
 	}
 	if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
 	{
-		Position += speed * deltaTime * Orientation*10.0f;
+		Position += speed * deltaTime * Orientation * 10.0f;
 	}
 	if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
 	{
-		Position -= speed * deltaTime * Orientation*10.0f;
+		Position -= speed * deltaTime * Orientation * 10.0f;
 	}
-
-
+	
+	static bool fKeyPressedLastFrame = false;
+	//f ingedrukt
+	if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS && !fKeyPressedLastFrame) {
+		followTrack = !followTrack;
+		fKeyPressedLastFrame = true;
+	}
+	//f losgelaten
+	if (glfwGetKey(window, GLFW_KEY_F) == GLFW_RELEASE) {
+		fKeyPressedLastFrame = false;
+	}
+	//als followtrack dan followSpline oproepen
+	if (followTrack) {
+		FollowSpline(deltaTime);
+	}
 	// Handles mouse inputs
 	if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
 	{
@@ -117,4 +131,27 @@ void Camera::Inputs(GLFWwindow* window,float deltaTime)
 		// Makes sure the next time the camera looks around it doesn't jump
 		firstClick = true;
 	}
+}
+
+void Camera::FollowSpline(float deltaTime)
+{
+	if (!spline) return;
+
+	float speedAlongTrack = 0.1f;
+	trackT += speedAlongTrack * deltaTime;
+	if (trackT > 1.0f) trackT -= 1.0f;
+
+	glm::vec3 position = spline->GetPointOnTrack(trackT);
+	glm::vec3 tangent = spline->GetTangent(trackT);
+
+	// Hardcoded global up (stabiliseert camera bij loopings)
+	glm::vec3 globalUp = glm::vec3(0.0f, 1.0f, 0.0f);
+
+	// Compute "side" and corrected up
+	glm::vec3 side = glm::normalize(glm::cross(tangent, globalUp));
+	glm::vec3 up = glm::normalize(glm::cross(side, tangent)); // corrected up
+
+	Position = position += up * 1.0f;
+	Orientation = tangent;
+	Up = up;
 }
