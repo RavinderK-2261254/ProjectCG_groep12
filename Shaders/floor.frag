@@ -1,10 +1,14 @@
 #version 330 core
-#define GLM_ENABLE_EXPERIMENTAL
+
 in vec3 vertexColor;
+in vec2 TexCoord;
+
 out vec4 FragColor;
 
+uniform sampler2D floorTexture;
 
 void main()
 {
-    FragColor = vec4(vertexColor, 1.0);
+    vec4 texColor = texture(floorTexture, TexCoord);
+    FragColor = texColor * vec4(vertexColor, 1.0); // combineer met kleur
 }
