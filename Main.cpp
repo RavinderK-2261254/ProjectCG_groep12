@@ -89,10 +89,27 @@ int main()
         glBindVertexArray(0);
 
         shader.use();
-        camera.Matrix(45.0f, 0.1f, 100.0f, shader, "cameraMatrix");
 
-        // Teken spline
+        glm::mat4 modelMatrix = glm::mat4(1.0f);
+        glm::mat4 viewMatrix = camera.GetViewMatrix();
+        glm::mat4 projectionMatrix = glm::perspective(
+            glm::radians(45.0f),
+            (float)SCR_WIDTH / (float)SCR_HEIGHT,
+            0.1f,
+            100.0f
+        );
+
+        shader.setMat4("model", modelMatrix);
+        shader.setMat4("view", viewMatrix);
+        shader.setMat4("projection", projectionMatrix);
+
+        shader.setVec3("lightPos", glm::vec3(5.0f, 10.0f, 5.0f));
+        shader.setVec3("viewPos", camera.GetPosition());
+        shader.setVec3("lightColor", glm::vec3(1.0f));
+        shader.setVec3("objectColor", glm::vec3(0.7f, 0.2f, 0.1f)); // roodbruin
+
         coaster.Draw(shader);
+        camera.Matrix(45.0f, 0.1f, 100.0f, shader, "cameraMatrix");
 
         glfwSwapBuffers(window);
         glfwPollEvents();
