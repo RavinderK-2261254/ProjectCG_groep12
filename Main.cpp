@@ -24,6 +24,7 @@ std::vector<glm::vec3> GenerateLooptieLoopPoints(int count, float radius, glm::v
 
 // Floor
 unsigned int floorVAO, floorVBO;
+unsigned int floorTexture;
 
 // Scherminstellingen
 const unsigned int SCR_WIDTH = 800;
@@ -58,6 +59,31 @@ int main()
     glEnable(GL_DEPTH_TEST);
     InitFloor();
 
+    glGenTextures(1, &floorTexture);
+    glBindTexture(GL_TEXTURE_2D, floorTexture);
+
+    // Texture wrapping/filtering
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    // Laad afbeelding
+    int width, height, nrChannels;
+    stbi_set_flip_vertically_on_load(true);
+    unsigned char* data = stbi_load("pave.jpg", &width, &height, &nrChannels, 0);
+    if (data)
+    {
+        GLenum format = nrChannels == 4 ? GL_RGBA : GL_RGB;
+        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    }
+    else
+    {
+        std::cout << "Failed to load texture\n";
+    }
+    stbi_image_free(data);
+
     Shader shader("line.vert", "line.frag");
     Shader floorShader("floor.vert", "floor.frag");
 
@@ -84,7 +110,12 @@ int main()
 
         floorShader.use();
         camera.Matrix(45.0f, 0.1f, 100.f, floorShader, "cameraMatrix");
+
         glad_glBindVertexArray(floorVAO);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, floorTexture);
+        floorShader.setInt("floorTexture", 0);
+
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         glBindVertexArray(0);
 
@@ -136,12 +167,13 @@ void processInput(GLFWwindow* window)
 void InitFloor()
 {
     float floorVertices[] = {
-        // positions          // colors
-        -10.0f, -5.0f, -10.0f,  0.6f, 0.6f, 0.6f,
-         10.0f, -5.0f, -10.0f,  0.6f, 0.6f, 0.6f,
-         10.0f, -5.0f,  10.0f,  0.6f, 0.6f, 0.6f,
-        -10.0f, -5.0f,  10.0f,  0.6f, 0.6f, 0.6f
+        // positions           // colors         // texCoords
+        -10.0f, -5.0f, -10.0f,  0.6f, 0.6f, 0.6f,  0.0f, 0.0f,
+         10.0f, -5.0f, -10.0f,  0.6f, 0.6f, 0.6f,  1.0f, 0.0f,
+         10.0f, -5.0f,  10.0f,  0.6f, 0.6f, 0.6f,  1.0f, 1.0f,
+        -10.0f, -5.0f,  10.0f,  0.6f, 0.6f, 0.6f,  0.0f, 1.0f
     };
+
     unsigned int floorIndices[] = {
         0, 1, 2,
         2, 3, 0
@@ -167,6 +199,18 @@ void InitFloor()
     // Kleur attribuut (locatie = 1)
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
+
+    // Positie
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    // Kleur
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    // Texture coördinaten
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+    glEnableVertexAttribArray(2);
 
     glBindVertexArray(0);
 }
