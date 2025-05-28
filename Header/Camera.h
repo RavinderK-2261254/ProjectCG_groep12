@@ -46,5 +46,10 @@ public:
     //spline volgen
     void FollowSpline(float deltaTime);
 
+    glm::vec3 GetPosition() const { return Position; };
+
+    glm::mat4 GetViewMatrix() const {
+        return glm::lookAt(Position, Position + Orientation, Up);
+   }
 };
 #endif 
