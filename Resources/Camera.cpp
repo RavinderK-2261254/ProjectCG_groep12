@@ -151,7 +151,7 @@ void Camera::FollowSpline(float deltaTime)
 	glm::vec3 side = glm::normalize(glm::cross(tangent, globalUp));
 	glm::vec3 up = glm::normalize(glm::cross(side, tangent)); // corrected up
 
-	Position = position += up * 1.0f;
+	Position = position - side * (0.5f / 2.0f) + up * 1.0f;
 	Orientation = tangent;
 	Up = up;
 }

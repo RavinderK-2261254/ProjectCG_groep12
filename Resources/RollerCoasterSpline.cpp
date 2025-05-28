@@ -7,6 +7,7 @@
 
 RollerCoasterSpline::RollerCoasterSpline(const std::vector<glm::vec3>& points)
     : controlPoints(points) {
+    
     GenerateSpline(50);
     BufferSetup();
 }
@@ -29,24 +30,22 @@ void RollerCoasterSpline::GenerateSpline(int samplesPerSegment) {
     if (numPoints < 4) return;
 
     for (size_t i = 0; i < numPoints; ++i) {
-        // Gebruik modulo om indices netjes om te wrappen, zodat de lus sluit
         glm::vec3 p0 = controlPoints[(i + numPoints - 1) % numPoints];
         glm::vec3 p1 = controlPoints[i % numPoints];
         glm::vec3 p2 = controlPoints[(i + 1) % numPoints];
         glm::vec3 p3 = controlPoints[(i + 2) % numPoints];
 
         for (int j = 0; j < samplesPerSegment; ++j) {
-            float t = (float)j / samplesPerSegment;
+            float t = static_cast<float>(j) / samplesPerSegment;
             glm::vec3 point = CatmullRom(p0, p1, p2, p3, t);
             splinePoints.push_back(point);
         }
     }
 
-    // Sluit visueel de lus door het eerste punt nog eens toe te voegen
-    splinePoints.push_back(splinePoints.front());
-
+    // Geen extra punt nodig – cycliciteit wordt door modulo verzorgd
     Generate3DRails();
 }
+
 
 
 void RollerCoasterSpline::BufferSetup() {
@@ -72,7 +71,7 @@ glm::vec3 RollerCoasterSpline::CatmullRomTangent(float t, glm::vec3 p0, glm::vec
 }
 
 glm::vec3 RollerCoasterSpline::GetPoint(float t) {
-    int numSegments = controlPoints.size() - 3;
+    int numSegments = controlPoints.size();
     float segmentFloat = t * numSegments;
     int segment = static_cast<int>(segmentFloat);
     float localT = segmentFloat - segment;
@@ -86,6 +85,7 @@ glm::vec3 RollerCoasterSpline::GetPoint(float t) {
 }
 
 glm::vec3 RollerCoasterSpline::GetTangent(float t) {
+    t = glm::clamp(t, 0.0f, 0.9999f);
     int numSegments = controlPoints.size();
     float segmentFloat = t * numSegments;
     int segment = static_cast<int>(segmentFloat) % numSegments;
@@ -121,25 +121,57 @@ void RollerCoasterSpline::Generate3DRails()
         rightRailPoints.push_back(right);
     }
 
-    // linker rail
-    glGenVertexArrays(1, &leftRailVAO);
-    glGenBuffers(1, &leftRailVBO);
-    glBindVertexArray(leftRailVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, leftRailVBO);
-    glBufferData(GL_ARRAY_BUFFER, leftRailPoints.size() * sizeof(glm::vec3), leftRailPoints.data(), GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
-    glEnableVertexAttribArray(0);
-    glBindVertexArray(0);
+    std::vector<Vertex> leftRailVertices, rightRailVertices;
+    std::vector<unsigned int> leftRailIndices, rightRailIndices;
 
-    //rechter rail
-    glGenVertexArrays(1, &rightRailVAO);
-    glGenBuffers(1, &rightRailVBO);
-    glBindVertexArray(rightRailVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, rightRailVBO);
-    glBufferData(GL_ARRAY_BUFFER, rightRailPoints.size() * sizeof(glm::vec3), rightRailPoints.data(), GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+    GenerateTubeRail(0.05f, 12, 100, leftRailVertices, leftRailIndices, true);
+    GenerateTubeRail(0.05f, 12, 100, rightRailVertices, rightRailIndices, false);
+
+    // 3D VAO voor linker rail
+    glGenVertexArrays(1, &leftRailVAO3D);
+    glGenBuffers(1, &leftRailVBO3D);
+    glGenBuffers(1, &leftRailEBO3D);
+
+    glBindVertexArray(leftRailVAO3D);
+    glBindBuffer(GL_ARRAY_BUFFER, leftRailVBO3D);
+    glBufferData(GL_ARRAY_BUFFER, leftRailVertices.size() * sizeof(Vertex), leftRailVertices.data(), GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, leftRailEBO3D);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, leftRailIndices.size() * sizeof(unsigned int), leftRailIndices.data(), GL_STATIC_DRAW);
+
+    // attrib layout 0: position, 1: normal, 2: texCoords
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, Position));
     glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, Normal));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, TexCoords));
+    glEnableVertexAttribArray(2);
+
     glBindVertexArray(0);
+    leftRailIndexCount = static_cast<int>(leftRailIndices.size());
+
+    // 3D VAO voor rechter rail
+    glGenVertexArrays(1, &rightRailVAO3D);
+    glGenBuffers(1, &rightRailVBO3D);
+    glGenBuffers(1, &rightRailEBO3D);
+
+    glBindVertexArray(rightRailVAO3D);
+    glBindBuffer(GL_ARRAY_BUFFER, rightRailVBO3D);
+    glBufferData(GL_ARRAY_BUFFER, rightRailVertices.size() * sizeof(Vertex), rightRailVertices.data(), GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, rightRailEBO3D);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, rightRailIndices.size() * sizeof(unsigned int), rightRailIndices.data(), GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, Position));
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, Normal));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, TexCoords));
+    glEnableVertexAttribArray(2);
+
+    glBindVertexArray(0);
+    rightRailIndexCount = static_cast<int>(rightRailIndices.size());
+
 }
 
 void RollerCoasterSpline::Draw3DRails(Shader& shader)
@@ -156,7 +188,7 @@ void RollerCoasterSpline::Draw3DRails(Shader& shader)
 
 void RollerCoasterSpline::GenerateRailMesh(float width, float height, std::vector<Vertex>& outVertices, std::vector<unsigned int>& outIndices)
 {
-    float spacing = 0.4f; // afstand tussen linker en rechter rail
+    float spacing = 0.4f; // afstand vanaf center
     int segmentCount = 100;
     float dt = 1.0f / segmentCount;
 
@@ -209,11 +241,11 @@ void RollerCoasterSpline::Draw(Shader& shader) {
     glDrawArrays(GL_LINE_STRIP, 0, splinePoints.size());
     glBindVertexArray(0);
 
-    Draw3DRails(shader);
+    DrawTubeRails(shader);
 }
 
 glm::vec3 RollerCoasterSpline::GetPointOnTrack(float t) const {
-    t = glm::clamp(t, 0.0f, 1.0f);
+    t = glm::clamp(t, 0.0f, 0.9999f);
     int totalSegments = controlPoints.size();
     float totalT = t * totalSegments;
     int segIndex = static_cast<int>(totalT) % totalSegments;
@@ -226,3 +258,138 @@ glm::vec3 RollerCoasterSpline::GetPointOnTrack(float t) const {
 
     return CatmullRom(p0, p1, p2, p3, localT);
 }
+
+void RollerCoasterSpline::GenerateTubeRail(float radius, int circleSegments, int trackSamples,
+    std::vector<Vertex>& outVertices,
+    std::vector<unsigned int>& outIndices, bool isLeftRail)
+{
+    float railOffset = 0.5f;
+
+    // Bereken parallel transport frames (up-vectors)
+    std::vector<glm::vec3> upVectors = ComputeParallelTransportFrames(trackSamples);
+
+    for (int i = 0; i <= trackSamples; ++i) {
+        float t = static_cast<float>(i) / trackSamples;
+
+        glm::vec3 center = GetPointOnTrack(t);
+        glm::vec3 tangent = glm::normalize(GetTangent(t));
+
+        glm::vec3 up = upVectors[i];
+        glm::vec3 side = glm::normalize(glm::cross(tangent, up));
+        glm::vec3 adjustedUp = glm::normalize(glm::cross(side, tangent));
+
+        // Verplaats center naar linker of rechter rail
+        glm::vec3 railCenter = center + (isLeftRail ? -side : side) * railOffset;
+
+        // Voor ieder punt van de cirkel
+        for (int j = 0; j < circleSegments; ++j) {
+            float angle = 2.0f * glm::pi<float>() * j / circleSegments;
+            glm::vec3 normal = cos(angle) * side + sin(angle) * adjustedUp;
+            glm::vec3 position = railCenter + normal * radius;
+
+            Vertex vertex;
+            vertex.Position = position;
+            vertex.Normal = normal;
+            vertex.TexCoords = glm::vec2(float(j) / circleSegments, float(i) / trackSamples);
+            outVertices.push_back(vertex);
+        }
+    }
+
+    // Maak index buffer (triangels van de buis)
+    for (int i = 0; i < trackSamples; ++i) {
+        for (int j = 0; j < circleSegments; ++j) {
+            int curr = i * circleSegments + j;
+            int next = curr + circleSegments;
+            int nextJ = (j + 1) % circleSegments;
+
+            int currNext = i * circleSegments + nextJ;
+            int nextNext = (i + 1) * circleSegments + nextJ;
+
+            outIndices.push_back(curr);
+            outIndices.push_back(next);
+            outIndices.push_back(currNext);
+
+            outIndices.push_back(next);
+            outIndices.push_back(nextNext);
+            outIndices.push_back(currNext);
+        }
+    }
+
+}
+
+
+void RollerCoasterSpline::DrawTubeRails(Shader& shader)
+{
+    shader.use();
+
+    glBindVertexArray(leftRailVAO3D);
+    glDrawElements(GL_TRIANGLES, leftRailIndexCount, GL_UNSIGNED_INT, 0);
+
+    glBindVertexArray(rightRailVAO3D);
+    glDrawElements(GL_TRIANGLES, rightRailIndexCount, GL_UNSIGNED_INT, 0);
+
+    glBindVertexArray(0);
+}
+
+std::vector<glm::vec3> RollerCoasterSpline::ComputeParallelTransportFrames(int trackSamples)
+{
+    std::vector<glm::vec3> upVectors(trackSamples + 1);
+
+    // Start vector up (kan anders als je wilt)
+    glm::vec3 firstTangent = glm::normalize(GetTangent(0.0f));
+    glm::vec3 arbitrary = glm::abs(glm::dot(firstTangent, glm::vec3(0, 1, 0))) > 0.9f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
+    glm::vec3 prevUp = glm::normalize(glm::cross(firstTangent, glm::cross(arbitrary, firstTangent)));
+    upVectors[0] = prevUp;
+
+    for (int i = 1; i <= trackSamples; ++i)
+    {
+        float tPrev = float(i - 1) / trackSamples;
+        float tCurr = float(i) / trackSamples;
+
+        glm::vec3 tangentPrev = glm::normalize(GetTangent(tPrev));
+        glm::vec3 tangentCurr = glm::normalize(GetTangent(tCurr));
+
+        glm::vec3 axis = glm::cross(tangentPrev, tangentCurr);
+
+        if (glm::length(axis) < 1e-5f) {
+            // nauwelijks draaiing
+            upVectors[i] = prevUp;
+        }
+        else {
+            axis = glm::normalize(axis);
+            float angle = acos(glm::clamp(glm::dot(tangentPrev, tangentCurr), -1.0f, 1.0f));
+
+            glm::mat4 rotMat = glm::rotate(glm::mat4(1.0f), angle, axis);
+            glm::vec4 rotatedUp = rotMat * glm::vec4(prevUp, 0.0f);
+            upVectors[i] = glm::vec3(rotatedUp);
+            prevUp = upVectors[i];
+        }
+    }
+
+    // **Hier corrigeren we de twist zodat upVectors[trackSamples] == upVectors[0]**
+
+    glm::vec3 firstUp = upVectors[0];
+    glm::vec3 lastUp = upVectors[trackSamples];
+
+    float dot = glm::clamp(glm::dot(firstUp, lastUp), -1.0f, 1.0f);
+    float angle = acos(dot);
+
+    if (angle > 1e-5f)
+    {
+        // Rotatie-as tussen lastUp en firstUp
+        glm::vec3 axis = glm::normalize(glm::cross(lastUp, firstUp));
+
+        // Verdeel twist over alle frames
+        for (int i = 0; i <= trackSamples; ++i)
+        {
+            float alpha = float(i) / trackSamples; // van 0 tot 1
+            float currAngle = alpha * angle;
+
+            glm::mat4 fixRot = glm::rotate(glm::mat4(1.0f), currAngle, axis);
+            upVectors[i] = glm::vec3(fixRot * glm::vec4(upVectors[i], 0.0f));
+        }
+    }
+
+    return upVectors;
+}
+
